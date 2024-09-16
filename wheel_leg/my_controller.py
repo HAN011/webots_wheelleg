@@ -7,23 +7,46 @@ import math
 ## 可视化使用
 import matplotlib.pyplot as plt
 import time
-x_data, y_data = [], []
 ##
-
-import numpy as np
-
+import sys
 import lagrange
 import leg
 import mymath
 from controller import Motor, PositionSensor, Gyro, Accelerometer, Robot
+import visual
+import numpy as np  # 导入 NumPy
 
 robot = Robot()
-plt.ion()
 timestep = int(robot.getBasicTimeStep())
 
+list_keyboard ={'a':0,'s':0,'d':0,'q':0,'e':0,'w':0,'z':0,'x':0,'c':0,'r':0,'f':0,'v':0}
+items = list_keyboard.items()
+import threading
+import time
+import keyboard
+def keyboard_input_thread(robot):
+    while True:
+        def on_key_event(e):
+            print(f"Key {e.name} pressed")
+            for key,value in items:
+                list_keyboard[key]+=keyboard.is_pressed(key)
+            print(cmd_phi)
+        keyboard.on_press(on_key_event)
+        keyboard.wait('esc')  # 监听 'esc' 键退出
+        # 添加其他命令处理
+        time.sleep(0.1)  # 稍微延迟，避免CPU占用过高
+
+# 创建并启动键盘输入线程
+input_thread = threading.Thread(target=keyboard_input_thread, args=(robot,))
+input_thread.start()
+
+# 输出
+i=0
+j=0
+
 # 足电机
-motor_5 = Motor('motor5')
-motor_6 = Motor('motor6')
+motor_5 = Motor('motor5')   #左轮
+motor_6 = Motor('motor6')   #右轮
 
 # 髋电机
 motor_1 = Motor('motor1')
@@ -82,7 +105,7 @@ theta_r4.last_diff = -0.305426
 
 target_L0_l = 0.2
 target_L0_r = 0.2
-target_roll = 0
+target_roll = 0.0
 
 # PID初始化
 F0_control_l = mymath.PID_control(400, 2, 8000, target_L0_l)
@@ -111,7 +134,8 @@ B = np.matrix([[0], [0]])
 
 # Main loop:
 while robot.step(timestep) != -1:
-
+    cmd_s=(list_keyboard['w']-list_keyboard['s'])/10.0
+    cmd_phi=(list_keyboard['a']-list_keyboard['d'])/5.0
     current_time = current_time + d_t
 
     # 机器人基本状态获取
@@ -244,10 +268,10 @@ while robot.step(timestep) != -1:
                                   [0],
                                   [0],
                                   [0]])
-    elif 11 < current_time <= 18:
-        expect_state = np.matrix([[10],
+    elif 11 < current_time <= 48:
+        expect_state = np.matrix([[10+cmd_s],
                                   [0],
-                                  [-3.14],
+                                  [-3.14+cmd_phi],
                                   [0],
                                   [0],
                                   [0],
@@ -264,7 +288,7 @@ while robot.step(timestep) != -1:
     if 14 < current_time <= 16:
         F0_control_l.targ_value = 0.325
         F0_control_r.targ_value = 0.325
-    if 16 < current_time <= 18:
+    if 16 < current_time <= 48:
         F0_control_l.targ_value = 0.205
         F0_control_r.targ_value = 0.203
 
@@ -297,7 +321,7 @@ while robot.step(timestep) != -1:
     dF_roll = -Froll_control.position_pid(roll)
     # dF_roll = 0
 
-    R_l = 0.2265
+    # R_l = 0.2265
 
     F_blinl = 0
     F_blinr = 0
@@ -320,7 +344,11 @@ while robot.step(timestep) != -1:
     T2_l = float(T_JOINT_R[0][0])
     T2_r = float(T_JOINT_R[1][0])
 
-    print("力矩，", T1_l, T1_r, T2_l, T2_r, T_l, T_r)
+    if i<50 :
+        i+=1
+    else:
+        #print("力矩， {0:10.2f} {1:10.2f} {2:10.2f} {3:10.2f} {4:10.2f} {5:10.2f}".format(T1_l, T1_r, T2_l, T2_r, T_l,T_r) + "{:37.2f}".format(current_time))
+        i=0
 
     # (acc_z - 9.8) 需要结合机身的姿态矩阵得出竖直向下的加速度，这里简单处理了
 
@@ -336,18 +364,25 @@ while robot.step(timestep) != -1:
     F_nr = Pr - m_w * 9.8 - m_w * acc_zwr
 
     # print("离地有关，", L0_l, L0_r, acc_zwl, acc_zwr, F_bl, F_br, T_pl, T_pr, Pl, Pr, F_nl, F_nr)
-    data = [L0_l, L0_r, acc_zwl, acc_zwr, F_bl, F_br, T_pl, T_pr, Pl, Pr, F_nl, F_nr]
+    # data = [L0_l, L0_r, acc_zwl, acc_zwr, F_bl, F_br, T_pl, T_pr, Pl, Pr, F_nl, F_nr]
+    #
+    # # with open('data.csv', 'a', newline = '') as file:
+    # #     writer = csv.writer(file)
+    # #     writer.writerow(data)
+    if j <5 :
+        j+=1
+        # print (j)
+    else :
+        # visual.visualization(current_time,real_state,expect_state)
+        j=0
 
-    # with open('data.csv', 'a', newline = '') as file:
-    #     writer = csv.writer(file)
-    #     writer.writerow(data)
-
-    x_data.append(time.time())
-    y_data.append(T1_l)
-
-    plt.plot(x_data, y_data)
-    plt.draw()
-    plt.pause(0.01)
+    #
+    # x_data.append(time.time())
+    # y_data.append(T1_l)
+    #
+    # plt.plot(x_data, y_data)
+    # plt.draw()
+    # plt.pause(0.01)
 
     if F_nl > -7:
         Offground_l = 1
@@ -382,7 +417,10 @@ while robot.step(timestep) != -1:
         motor_3.setTorque(T1_r)
         motor_2.setTorque(T2_l)
         motor_4.setTorque(T2_r)
-        motor_5.setTorque(T_l)
-        motor_6.setTorque(T_r)
+        motor_5.setTorque(T_l) #左轮
+        motor_6.setTorque(T_r) #右轮
 
     pass
+
+
+sys.exit()
